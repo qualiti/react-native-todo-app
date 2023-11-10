@@ -1,19 +1,9 @@
-/**
- * Sample React Native App
- * https://github.com/facebook/react-native
- *
- * @format
- */
-
-import React, {useEffect, useRef, useState} from 'react';
+import React, {useEffect, useState} from 'react';
 import {
-  Animated,
   Button,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   SafeAreaView,
-  ScrollView,
   StatusBar,
   StyleSheet,
   Text,
@@ -21,68 +11,61 @@ import {
   View,
   useColorScheme,
 } from 'react-native';
-
-type TodoItemProps = {
-  title: string;
-};
-
-let todoList: string[] = [];
-
-const TodoItem = ({title}: TodoItemProps) => {
-  const [isDone, setIsDone] = useState(false);
-  const fadeAnim = useRef(new Animated.Value(2)).current;
-  const [borderValue, setBorderValue] = useState(2);
-  fadeAnim.addListener(({value}) => {
-    setBorderValue(value);
-  });
-
-  useEffect(() => {
-    Animated.timing(fadeAnim, {
-      toValue: isDone ? 8 : 2,
-      duration: 100,
-      useNativeDriver: true,
-    }).start();
-  }, [fadeAnim, isDone]);
-
-  return (
-    <View style={[todoStyle.container]}>
-      <Pressable onPress={() => setIsDone(!isDone)}>
-        <View style={[todoStyle.circle, {borderWidth: borderValue}]} />
-      </Pressable>
-      <Text>{title}</Text>
-    </View>
-  );
-};
-
-const todoStyle = StyleSheet.create({
-  container: {
-    display: 'flex',
-    flexDirection: 'row',
-    alignItems: 'center',
-    margin: 4,
-  },
-  circle: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    borderStyle: 'solid',
-    borderColor: 'black',
-    borderWidth: 2,
-    marginRight: 8,
-  },
-  circleFull: {
-    borderWidth: 8,
-  },
-});
+import 'react-native-get-random-values';
+import {v4} from 'uuid';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import TodoList, {TodoItem} from './src/TodoList';
 
 function App(): JSX.Element {
+  const [isLoaded, setIsLoaded] = useState(false);
   const isDarkMode = useColorScheme() === 'dark';
   const [todoText, setTodoText] = useState('');
+  const [todoList, setTodoList] = useState<TodoItem[]>([]);
+
+  useEffect(() => {
+    AsyncStorage.getItem('todoList').then(value => {
+      setIsLoaded(true);
+      if (value) {
+        const parsedTodoList = JSON.parse(value);
+        if (Array.isArray(parsedTodoList)) {
+          setTodoList(parsedTodoList);
+        }
+      }
+    });
+  }, []);
 
   const addTodo = () => {
-    todoList.push(todoText);
+    setTodoList(current => {
+      const newItem = {
+        title: todoText,
+        identifier: v4(),
+        done: false,
+        createdAt: new Date(),
+      };
+
+      const newList = [...current, newItem];
+      AsyncStorage.setItem('todoList', JSON.stringify(newList));
+      return newList;
+    });
     setTodoText('');
   };
+
+  const setItemDone = (identifier: string, done: boolean) => {
+    setTodoList(current => {
+      const newList = current.map(item => {
+        if (item.identifier === identifier) {
+          return {...item, done};
+        }
+        return item;
+      });
+      AsyncStorage.setItem('todoList', JSON.stringify(newList));
+      return newList;
+    });
+  };
+
+  if (!isLoaded) {
+    return <Text>Loading...</Text>;
+  }
 
   return (
     <SafeAreaView style={[styles.container]}>
@@ -91,11 +74,7 @@ function App(): JSX.Element {
         style={[styles.flexContainer]}>
         <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
         {todoList.length > 0 ? (
-          <ScrollView>
-            {todoList.map(val => (
-              <TodoItem title={val} key={val} />
-            ))}
-          </ScrollView>
+          <TodoList items={todoList} setItemDone={setItemDone} />
         ) : (
           <Text style={[styles.flexContainer, styles.headingText]}>
             You have finished all of your todos!
